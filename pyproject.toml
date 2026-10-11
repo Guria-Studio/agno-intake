@@ -1,0 +1,27 @@
+[project]
+name = "guria-intake"
+description = "Agente de intake de guria.lat con Agno: curso de aprendizaje"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = [
+    "agno>=3.1.2",
+    "fastapi>=0.143.0",
+    "openai>=3.28.0",
+    "python-multipart>=0.0.32",
+    "sqlalchemy[asyncio]>=2.1.4",
+    "tavily-python>=0.8.5",
+    "uvicorn>=0.54.0",
+]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=9.1.1",
+]
+
+[build-system]
+requires = ["uv_build>=0.9,<1"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

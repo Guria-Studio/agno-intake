@@ -1,0 +1,70 @@
+# Lo que hace guria.lat. Edítalo sin tocar código: el workflow lo lee en cada intake.
+#
+# [[servicio]]  qué tipo de trabajo hacemos. Decide si un proyecto "encaja".
+# [[caso]]      proyectos reales, para usar de referencia en el borrador interno.
+#               El revisor rechaza cualquier caso que no esté en esta lista.
+
+[[servicio]]
+nombre = "Agentes de IA"
+descripcion = "Agentes que conversan, deciden y usan herramientas (APIs, bases, agendas) dentro de un proceso del negocio."
+
+[[servicio]]
+nombre = "WhatsApp"
+descripcion = "Atención, pedidos, agenda y recordatorios por WhatsApp Cloud API, con o sin IA."
+
+[[servicio]]
+nombre = "RAG y búsqueda sobre documentos"
+descripcion = "Chatbots y buscadores que responden con los documentos del negocio."
+
+[[servicio]]
+nombre = "Productos de punta a punta"
+descripcion = "Web, backend y apps móviles: desde validar la idea hasta producción."
+
+[[servicio]]
+nombre = "Evaluación de modelos"
+descripcion = "Medir calidad, costo y latencia de un LLM antes de ponerlo en producción."
+
+[[servicio]]
+nombre = "Infraestructura para IA"
+descripcion = "Orquestación de agentes, modelos locales (Ollama), gateways y servidores propios."
+
+
+[[caso]]
+nombre = "PideAI"
+objetivo = "Pedidos por WhatsApp para restaurantes y tiendas, con agente que agenda vía function calling."
+stack = "NestJS · FastAPI · pgvector · Flutter"
+
+[[caso]]
+nombre = "Showly"
+objetivo = "Agenda por WhatsApp para clínicas: recordatorios y confirmación para bajar no-shows."
+stack = "NestJS · Next.js · Prisma · pgvector · BullMQ"
+
+[[caso]]
+nombre = "Orch"
+objetivo = "Agentes de código en paralelo sobre un grafo de tareas, con control de cuota por proveedor."
+stack = "Go · SQLite"
+
+[[caso]]
+nombre = "Open Fluent"
+objetivo = "Gate de evaluación: un modelo entra a producción solo con ≥95 % JSON válido y p90 < 8 s."
+stack = "TypeScript · evaluación offline"
+
+[[caso]]
+nombre = "UseBot"
+objetivo = "Chatbot RAG sobre documentos del negocio, corriendo en Cloudflare."
+stack = "Cloudflare Workers · Vectorize · Workers AI"
+
+[[caso]]
+nombre = "Blog con agentes"
+objetivo = "Tres agentes escriben, optimizan e ilustran contenido para una cadena de supermercados."
+stack = "Next.js · Claude · prompts versionados en BD"
+
+[[caso]]
+nombre = "Labo System"
+objetivo = "Administración de laboratorio clínico con informes PDF desde plantillas."
+stack = "Next.js · Convex · react-pdf"
+
+[[caso]]
+nombre = "Squads en infra propia"
+objetivo = "Orquestación de agentes en servidores propios: 3× paralelo real."
+stack = "Multica · Ollama · OpenRouter · VPS"
