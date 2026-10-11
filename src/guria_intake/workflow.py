@@ -213,7 +213,18 @@ def componer(step_input: StepInput, run_context: RunContext) -> StepOutput:
 # Lo que el cliente nunca puede ver, verificado en código y no solo pedido en el prompt.
 # "reales"/"reais" también son adjetivos ("turnos reales", "dados reais"): moneda solo junto a un número.
 PRECIO = re.compile(r"(US\$|R\$|\$|€|\b(usd|brl)\b|\d\s*(mil\s+)?(dólares?|dolares?|reais|reales)\b)", re.I)
-PLAZO = re.compile(r"\b\d+\s*(semanas?|meses|mes|días?|dias?|mês)\b", re.I)
+# Plazos en cifras ("3 semanas", "15 días") o en palabras ("dos semanas", "un mes", "medio año").
+# Con días solo cifras: "un día normal con el problema resuelto" es justo lo que el prompt pide.
+# Las horas no: "responde en 24 horas" describe el producto, no un plazo de entrega.
+_NUMEROS = (r"un|una|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce|"
+            r"um|uma|dois|duas|três|tres|quatro|cinco|seis|sete|oito|nove|dez|onze|doze|"
+            r"par de|algunas|algumas|pocas|poucas")
+PLAZO = re.compile(
+    rf"(\b\d+\s*(semanas?|meses|mes|días?|dias?|mês|años?|anos?)\b|"
+    rf"\b({_NUMEROS})\s+(semanas?|meses|mes|mês|años?|anos?)\b|"
+    rf"\b(medio año|meio ano|una quincena|uma quinzena|quince días|quinze dias)\b)",
+    re.I,
+)
 # El límite ético de la lectura, verificado: nada de presión ni escasez inventada.
 # Frases de presión, no palabras sueltas: "ofertas por WhatsApp" o "descuento al recomprar" pueden
 # ser justo el proyecto del cliente, y la propuesta tiene que poder usar sus palabras.

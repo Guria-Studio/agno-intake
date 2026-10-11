@@ -125,6 +125,23 @@ def test_ofertas_y_descuentos_del_proyecto_no_son_presion(texto):
     assert not workflow.PRESION.search(texto)
 
 
+@pytest.mark.parametrize("texto", ["Listo en dos semanas", "En un mes lo probamos", "Medio año de trabajo",
+                                   "Em duas semanas", "Un par de semanas", "En 15 días", "Uma quinzena"])
+def test_plazo_en_palabras_se_detecta(texto):
+    assert workflow.PLAZO.search(texto)
+
+
+@pytest.mark.parametrize("texto", ["Un día normal con la agenda llena", "Cada mes revisamos los números",
+                                   "Responde en 24 horas", "Las semanas con más turnos"])
+def test_no_es_plazo(texto):
+    assert not workflow.PLAZO.search(texto)
+
+
+@pytest.mark.parametrize("texto", ["Cuesta 5 mil dólares", "USD 3000", "US$ 900", "Unos $1500", "R$ 5000"])
+def test_precio_en_dolares_se_detecta(texto):
+    assert workflow.PRECIO.search(texto)
+
+
 def test_turnos_reales_no_es_moneda():
     assert not workflow.PRECIO.search("Pierden turnos reales cada semana")
 
