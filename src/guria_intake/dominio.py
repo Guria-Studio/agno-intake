@@ -58,7 +58,9 @@ def evaluar_encaje(plazo: str) -> dict:
 # Se ajusta en .env sin tocar código: TARIFA_USD_HORA="25-45", HORAS_SEMANA="25".
 def estimar(esfuerzo: list[dict]) -> dict:
     """Horas del modelo × tarifa del equipo. El modelo nunca pone el precio."""
-    t_min, t_max = (int(x) for x in os.environ.get("TARIFA_USD_HORA", "25-45").split("-"))
+    # "25-45" es un rango; "30" sola es una tarifa fija (30-30).
+    tarifa = os.environ.get("TARIFA_USD_HORA", "25-45").split("-")
+    t_min, t_max = int(tarifa[0]), int(tarifa[-1])
     por_semana = int(os.environ.get("HORAS_SEMANA", "25"))
     h_min = sum(p["horas_min"] for p in esfuerzo)
     h_max = sum(p["horas_max"] for p in esfuerzo)

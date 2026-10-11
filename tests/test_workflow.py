@@ -268,3 +268,8 @@ def test_formulario_rechaza_email_invalido(email):
 
 def test_privada_no_rompe_sin_arroba():
     assert not workflow.privada("recordatorios", {"nombre": "Ana", "email": "sin-arroba", "empresa": ""})
+
+
+def test_tarifa_fija(monkeypatch):
+    monkeypatch.setenv("TARIFA_USD_HORA", "30")
+    assert estimar([{"horas_min": 10, "horas_max": 20}])["usd"] == (300, 600)

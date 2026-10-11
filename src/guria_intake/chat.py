@@ -89,9 +89,10 @@ def cerrar_conversacion(run_context: RunContext, motivo: Literal["sin_proyecto",
 
 def portero(run_context: RunContext) -> None:
     s = run_context.session_state
-    s["turnos"] += 1
-    if s["estado"] == "abierta" and s["turnos"] > MAX_TURNOS:
-        s["estado"] = "cerrada"
+    if s["estado"] == "abierta":  # las cerradas no cuentan: solo se rechazan
+        s["turnos"] += 1
+        if s["turnos"] > MAX_TURNOS:
+            s["estado"] = "cerrada"
     if s["estado"] != "abierta":
         raise InputCheckError(s["estado"])
 

@@ -47,8 +47,10 @@ def test_portero():
     chat.portero(c)
     assert c.session_state["turnos"] == 1
 
+    cerrada = ctx(estado="cerrada")
     with pytest.raises(InputCheckError):
-        chat.portero(ctx(estado="cerrada"))
+        chat.portero(cerrada)
+    assert cerrada.session_state["turnos"] == 0  # una sesión cerrada no suma turnos
 
     c = ctx(turnos=chat.MAX_TURNOS)
     with pytest.raises(InputCheckError):
