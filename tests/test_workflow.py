@@ -112,6 +112,19 @@ def test_la_propuesta_no_lleva_precio_plazo_ni_presion(monkeypatch, texto):
     assert llamadas["Propuesta"] == 2 and r["problemas_propuesta"] == []
 
 
+@pytest.mark.parametrize("texto", ["Descuento por tiempo limitado", "Últimos cupos del mes", "Só hoje",
+                                   "Oferta válida hasta el viernes", "No te quedes afuera"])
+def test_presion_se_detecta(texto):
+    assert workflow.PRESION.search(texto)
+
+
+@pytest.mark.parametrize("texto", ["Enviar ofertas personalizadas a tus clientes",
+                                   "Un descuento automático al recomprar", "Promociones por WhatsApp"])
+def test_ofertas_y_descuentos_del_proyecto_no_son_presion(texto):
+    # Si el proyecto es de ofertas, la propuesta tiene que poder decirlo con las palabras del cliente.
+    assert not workflow.PRESION.search(texto)
+
+
 def test_turnos_reales_no_es_moneda():
     assert not workflow.PRECIO.search("Pierden turnos reales cada semana")
 

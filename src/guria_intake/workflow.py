@@ -215,8 +215,17 @@ def componer(step_input: StepInput, run_context: RunContext) -> StepOutput:
 PRECIO = re.compile(r"(US\$|R\$|\$|€|\b(usd|brl)\b|\d\s*(mil\s+)?(dólares?|dolares?|reais|reales)\b)", re.I)
 PLAZO = re.compile(r"\b\d+\s*(semanas?|meses|mes|días?|dias?|mês)\b", re.I)
 # El límite ético de la lectura, verificado: nada de presión ni escasez inventada.
-PRESION = re.compile(r"(últim[oa]s (cupos|lugares|vagas)|s[oó]lo (por )?hoy|s[oó] hoje|descuento|desconto|"
-                     r"oferta|promoci[oó]n|promoção|antes de que sea tarde|no te quedes afuera)", re.I)
+# Frases de presión, no palabras sueltas: "ofertas por WhatsApp" o "descuento al recomprar" pueden
+# ser justo el proyecto del cliente, y la propuesta tiene que poder usar sus palabras.
+PRESION = re.compile(
+    r"(últim[oa]s (cupos|lugares|vagas|unidades)|"
+    r"s[oó]lo (por )?(hoy|esta semana)|s[oó] (hoje|esta semana)|"
+    r"por (tiempo|tempo) limitado|"
+    r"(oferta|promoci[oó]n|promoção) (v[aá]lida|vence|termina)|"
+    r"(descuento|desconto) (exclusivo|especial|si firmas|se fechar|por (tiempo|tempo) limitado)|"
+    r"antes de que sea tarde|antes que seja tarde|no te quedes (afuera|fuera)|n[aã]o fique de fora)",
+    re.I,
+)
 
 
 def revisar_propuesta(step_input: StepInput, run_context: RunContext) -> StepOutput:
