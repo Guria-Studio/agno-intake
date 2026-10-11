@@ -1,0 +1,30 @@
+# Backoffice con datos de clientes: por defecto solo localhost. Para entrar desde tu tailnet,
+# en la IP de Tailscale (nunca 0.0.0.0, que lo publica en todas las redes del servidor):
+#   streamlit run src/guria_intake/admin/app.py --server.address 100.125.96.60
+[server]
+address = "127.0.0.1"
+port = 8501
+
+[client]
+toolbarMode = "minimal"  # sin el botón Deploy de Streamlit Cloud
+
+[browser]
+gatherUsageStats = false
+
+# Los colores de guria.lat (documentos/estilo.py)
+[theme]
+base = "light"
+primaryColor = "#E2502B"
+backgroundColor = "#FAFAF7"
+secondaryBackgroundColor = "#EFEEE9"
+textColor = "#111417"
+borderColor = "#DDDBD3"
+linkColor = "#B03A1B"
+baseRadius = "0.5rem"
+showSidebarBorder = true
+font = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+headingFont = "Archivo:https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&display=swap"
+codeFont = "JetBrains Mono:https://fonts.googleapis.com/css2?family=JetBrains+Mono&display=swap"
+
+[theme.sidebar]
+backgroundColor = "#EFEEE9"

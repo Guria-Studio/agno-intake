@@ -97,6 +97,13 @@ def portero(run_context: RunContext) -> None:
         raise InputCheckError(s["estado"])
 
 
+def estado(chat: Agent, session_id: str) -> str:
+    """"abierta" para una sesión que todavía no existe: Agno levanta Exception en vez de devolver {}."""
+    if not chat.get_session(session_id=session_id):
+        return "abierta"
+    return chat.get_session_state(session_id=session_id).get("estado", "abierta")
+
+
 def build_chat(db: SqliteDb | None = None) -> Agent:
     return Agent(
         name="Asistente de intake",
@@ -119,7 +126,7 @@ if __name__ == "__main__":
     chat = build_chat()
     session_id = f"cli-{uuid.uuid4().hex[:8]}"
     print(f"Chat de intake {session_id} (Ctrl+C para salir)\n")
-    while chat.get_session_state(session_id=session_id).get("estado", "abierta") == "abierta":
+    while estado(chat, session_id) == "abierta":
         r = chat.run(input("tú › "), session_id=session_id)
         print("bot ›", r.content, "\n")
     print("Sesión:", chat.get_session_state(session_id=session_id))

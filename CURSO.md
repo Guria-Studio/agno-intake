@@ -40,6 +40,11 @@ agno-intake/
 │   │   ├── estilo.py        marca, textos fijos y CSS
 │   │   └── pdf.py           HTML → PDF con Chrome headless
 │   ├── avisos.py            email al equipo por SMTP (Resend)
+│   ├── admin/               backoffice en Streamlit (login, solo localhost)
+│   │   ├── app.py           entrada: navegación; el tema está en .streamlit/config.toml
+│   │   ├── auth.py          login de un usuario (ADMIN_USER / ADMIN_PASSWORD)
+│   │   ├── datos.py         lee sesiones, JSON y PDF; sin Streamlit
+│   │   └── vistas/          panel, conversaciones (con detalle) y probar el chat
 │   ├── dominio.py           modelo, base, catálogo, reglas puras
 │   ├── capacidades.toml     lo que hace el equipo y sus casos (lo editas tú)
 │   ├── schemas.py           contratos pydantic

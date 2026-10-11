@@ -9,6 +9,7 @@ dependencies = [
     "openai>=3.28.0",
     "python-multipart>=0.0.32",
     "sqlalchemy[asyncio]>=2.1.4",
+    "streamlit>=1.65.0",
     "tavily-python>=0.8.5",
     "uvicorn>=0.54.0",
 ]

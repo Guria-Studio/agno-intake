@@ -67,3 +67,10 @@ def test_archivo_no_sale_de_borradores(malo):
 def test_archivo_acepta_ids_reales():
     for bueno in ["cli-1a2b3c4d", "758b371f-38f2-4471-a790-8f0dce1510b9"]:
         assert chat.archivo(bueno).parent == chat.BORRADORES
+
+
+def test_estado_de_una_sesion_nueva_es_abierta():
+    # Agno levanta Exception("Session not found"); el chat y el backoffice preguntan antes del primer mensaje.
+    from agno.db.sqlite import SqliteDb
+    agente = chat.build_chat(db=SqliteDb(db_file=os.path.join(tempfile.mkdtemp(), "t.db")))
+    assert chat.estado(agente, "nunca-usada") == "abierta"
