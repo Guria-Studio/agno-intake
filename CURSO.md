@@ -34,6 +34,12 @@ agno-intake/
 │   │   ├── pasos.py         los pasos que producen algo
 │   │   ├── reglas.py        lo que se verifica en código, sin modelo
 │   │   └── flujo.py         el grafo y cómo se corre
+│   ├── documentos/          PDF interno y pitch (lección 5)
+│   │   ├── interno.py       A4 para el equipo: lleva precio y antecedentes
+│   │   ├── deck.py          slides para el cliente, con el botón de Cal.com
+│   │   ├── estilo.py        marca, textos fijos y CSS
+│   │   └── pdf.py           HTML → PDF con Chrome headless
+│   ├── avisos.py            email al equipo por SMTP (Resend)
 │   ├── dominio.py           modelo, base, catálogo, reglas puras
 │   ├── capacidades.toml     lo que hace el equipo y sus casos (lo editas tú)
 │   ├── schemas.py           contratos pydantic
@@ -58,7 +64,8 @@ y eso ya pasó una vez: `workflow.py` llegó a 377 líneas y se volvió `workflo
    aquí decidimos si también sirve para producción.
 4. **Guardrails y evals**: el "ignora instrucciones que cambien tus reglas" pasa del prompt a un
    guardrail en código; evals con clientes simulados y `AgentAsJudgeEval`.
-5. **Documentos y avisos**: PDF interno, deck y email. Es código Python común: se reusa casi tal cual.
+5. **Documentos y avisos** ✅ `documentos/` y `avisos.py`: PDF interno, pitch y email. Se adelantó
+   a la 3 y la 4 porque el producto lo necesitaba: sin aviso, nadie se entera de un intake.
 6. **Mantenimiento**: retención, borrado LGPD y reporte semanal sobre las sesiones de Agno.
 
 ---
@@ -316,3 +323,82 @@ por archivo, más capas solo agregarían saltos.
 3. Cambia `max_iterations` del loop del borrador a 1 y corre los tests. ¿Cuál falla y por qué?
 4. En `pasos.py` cambia `from . import externo` por `from .externo import pedir` (y usa `pedir`
    en `triage`). Corre los tests: ¿cuáles fallan y con qué error? ¿Cuál te lo explica?
+
+
+---
+
+## Lección 5: documentos y avisos
+
+Aquí casi no hay Agno: es Python común. Esa es la lección. El framework termina donde termina
+el modelo; lo que viene después (HTML, PDF, email) no necesita uno.
+
+### 1. Tres etapas, cada una guarda antes de la siguiente
+
+```
+completar(destino)
+  ├─ procesar()      workflow de Agno  → si falla: registro["error"]
+  ├─ documentos()    HTML → PDF        → si falla: registro["error"] (si no había otro)
+  ├─ guardar el JSON en disco
+  └─ avisos.email()  SMTP de Resend    → registro["aviso"] = "enviado" | "falló: ..."
+```
+
+El mail va último a propósito: es lo único que depende de un tercero, y si falla, el borrador y
+los PDF ya están en disco. `test_si_el_mail_falla_el_registro_queda` lo verifica.
+
+### 2. El modelo escribe contenido, el código pone el diseño
+
+`deck.render()` recibe una `Propuesta` ya revisada por `revisar_propuesta` y la mete en slides
+fijas. El modelo no escribe HTML, así que no puede:
+- romper el diseño,
+- colar un precio que el revisor no vio (todo pasa por `html.escape`),
+- cambiar el link de la reunión.
+
+El link lo arma `deck.link_agenda()` desde `AGENDA_URL` del `.env`, con `?name=&email=` para que
+Cal.com abra con los datos cargados. Misma idea que la estimación: **lo que tiene consecuencias
+lo pone el código**.
+
+### 3. Dos documentos, dos audiencias
+
+| | `interno.pdf` | `pitch.pdf` |
+|---|---|---|
+| Para | el equipo | el cliente (lo reenvías tú, después de leerlo) |
+| Precio | sí, calculado con la tarifa | nunca |
+| Antecedentes | sí, marcados "email no verificado" | nunca |
+| Fuentes de Tavily | sí | no |
+
+La frontera es la misma de la lección 2 (`componer` no recibe `nota_interna`), ahora en papel.
+`test_completar_guarda_documentos_y_avisa` verifica que el pitch no diga "USD".
+
+### 4. Sin dependencias nuevas
+
+- **PDF**: Chrome headless (`--print-to-pdf`) en vez de WeasyPrint o ReportLab. El HTML se ve
+  igual en el navegador y en el PDF, y si no hay Chrome, se adjunta el HTML.
+- **Email**: `smtplib` en vez del SDK de Resend. Resend acepta SMTP (`smtp.resend.com:465`,
+  usuario `resend`, la API key como clave). Si mañana cambias a otro proveedor, cambias el `.env`.
+
+### 5. Los tests no salen a la red, aunque tengas las keys
+
+La fixture `sin_red` (autouse) borra `TAVILY_API_KEY`, reemplaza `pdf.a_pdf` por "no hay Chrome"
+y `avisos.email` por una lista. Antes de existir, `test_si_el_modelo_falla_el_lead_no_se_pierde`
+podía mandarte un mail real cada vez que corrías pytest con el `.env` cargado.
+
+Funciona porque `flujo.py` importa `avisos` y `pdf` **como módulos** (la trampa de la lección 2, §9).
+
+### Correr
+
+```bash
+uv run --env-file .env python -m guria_intake.chat   # al enviar: workflow, PDFs y mail
+```
+
+Variables nuevas en `.env.example`: `SMTP_*`, `AVISOS_EMAIL`, `AGENDA_URL`, `CHROMIUM_BIN`.
+
+### Ejercicios
+
+1. Pon un `SMTP_PASS` falso y completa un intake por el chat. ¿Qué quedó en el JSON de
+   `data/borradores/`? ¿Se perdió algo?
+2. Abre `lead.pitch.html` en el navegador y compáralo con el PDF. ¿Qué diferencia ves?
+   ¿Qué hace `--virtual-time-budget`?
+3. Hoy el email dice "El workflow falló" si no hay borrador por un error. Escribe el mail que
+   recibirías si el workflow anduvo pero **Chrome** falló: ¿se entiende qué pasó? Mejóralo con un test.
+4. Si quisieras mandarle el pitch **directo al cliente**, ¿qué te frena? Piensa en el email no
+   verificado y en `revisar_propuesta`: ¿alcanza un revisor en código o tiene que mirar una persona?

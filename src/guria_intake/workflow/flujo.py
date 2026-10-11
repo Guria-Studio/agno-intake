@@ -11,6 +11,7 @@ escribe sus claves, como el TypedDict `Estado` de LangGraph.
 
 import json
 import logging
+import os
 from pathlib import Path
 
 from agno.db.sqlite import SqliteDb
@@ -18,8 +19,10 @@ from agno.run import RunContext
 from agno.run.base import RunStatus
 from agno.workflow import Condition, Loop, Parallel, Step, StepInput, StepOutput, Steps, Workflow
 
+from .. import avisos  # por el módulo: los tests reemplazan avisos.email y pdf.a_pdf
+from ..documentos import deck, interno, pdf
 from ..dominio import base, estimar
-from ..schemas import Formulario
+from ..schemas import Formulario, Propuesta
 from .pasos import antecedentes, cliente, componer, investigar, marketing, pedir_datos, preparar, redactar, triage
 from .reglas import revisar, revisar_propuesta
 
@@ -128,16 +131,48 @@ def procesar(formulario: dict, session_id: str | None = None) -> dict:
     return resumir(estado)
 
 
+def documentos(destino: Path, registro: dict) -> list[Path]:
+    """El interno (si hay borrador) y el pitch (si hay propuesta), junto al formulario:
+    lead.interno.pdf y lead.pitch.pdf. Devuelve los adjuntos para el email."""
+    adjuntos = []
+    if registro.get("borrador"):
+        adjuntos.append(pdf.guardar(interno.render(destino.stem, registro), destino.parent, f"{destino.stem}.interno"))
+    if p := registro.get("propuesta"):
+        f = registro["formulario"]
+        # El link lo pone el código desde .env, nunca el modelo; con nombre y email para Cal.com.
+        agenda = deck.link_agenda(os.environ.get("AGENDA_URL", "https://cal.com/knaimero/pitch-intake"),
+                                  f["nombre"], f["email"])
+        adjuntos.append(pdf.guardar(deck.render(Propuesta(**p), agenda), destino.parent, f"{destino.stem}.pitch"))
+    return adjuntos
+
+
 def completar(destino: Path) -> None:
-    """Después de enviar_intake: corre el workflow y guarda el resultado junto al formulario.
-    (Los PDF y el email llegan en la lección 5.)"""
-    # El formulario ya está en disco: si algo falla de aquí en adelante, el lead no se pierde.
-    registro = json.loads(destino.read_text()) | {"error": None}
+    """Después de enviar_intake: corre el workflow, arma el interno y el pitch en PDF y te los
+    manda por email. Cada etapa guarda lo suyo antes de la siguiente: si algo falla, el lead
+    no se pierde y el error queda anotado en el registro."""
+    log = logging.getLogger(__name__)
+    registro = json.loads(destino.read_text()) | {"error": None, "aviso": None}
     try:
         # Prefijo propio: el chat ya usa destino.stem como session_id, y en Agno el
         # session_id es único en toda la base (sesión de agente o de workflow, no ambas).
         registro |= procesar(registro["formulario"], session_id=f"wf-{destino.stem}")
     except Exception as e:
-        logging.getLogger(__name__).exception("intake: falló el workflow")
+        log.exception("intake: falló el workflow")
         registro["error"] = repr(e)
+
+    adjuntos = []
+    try:
+        adjuntos = documentos(destino, registro)
+    except Exception as e:
+        log.exception("intake: fallaron los documentos")
+        registro["error"] = registro["error"] or f"documentos: {e!r}"
+    destino.write_text(json.dumps(registro, ensure_ascii=False, indent=2))
+
+    try:  # el aviso va último: si el mail falla, todo lo anterior ya está en disco
+        avisos.email(avisos.asunto(registro, interno.titulo(registro)),
+                     avisos.texto_intake(destino.stem, registro), adjuntos)
+        registro["aviso"] = "enviado"
+    except Exception as e:
+        log.exception("intake: no se pudo mandar el mail")
+        registro["aviso"] = f"falló: {e!r}"
     destino.write_text(json.dumps(registro, ensure_ascii=False, indent=2))

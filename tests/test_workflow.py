@@ -11,7 +11,8 @@ os.environ.setdefault("ROUTER_API_KEY", "test")
 
 import pytest
 
-from guria_intake import workflow
+from guria_intake import avisos, workflow
+from guria_intake.documentos import pdf
 from guria_intake.workflow import externo, reglas
 from guria_intake.dominio import CASOS, EJEMPLO, catalogo, estimar
 from guria_intake.schemas import Borrador, Busquedas, Etapa, Lectura, Partida, Propuesta, Triage
@@ -60,9 +61,14 @@ CLARA = Triage(vaga=False, faltantes=[])
 
 
 @pytest.fixture(autouse=True)
-def sin_tavily(monkeypatch):
-    # Aunque tengas la key en tu entorno, los tests no salen a internet salvo que la pongan.
+def sin_red(monkeypatch):
+    """Aunque tengas las keys en tu entorno, los tests no buscan en internet, no mandan
+    mails ni abren Chrome. Devuelve los mails que se habrían mandado."""
     monkeypatch.delenv("TAVILY_API_KEY", raising=False)
+    monkeypatch.setattr(pdf, "a_pdf", lambda html, destino: False)  # adjunta el HTML
+    enviados = []
+    monkeypatch.setattr(avisos, "email", lambda asunto, texto, adjuntos: enviados.append((asunto, texto, adjuntos)))
+    return enviados
 
 
 def test_camino_feliz(monkeypatch):
@@ -284,3 +290,32 @@ def test_los_pasos_no_guardan_copias_de_externo():
     for modulo in (pasos, reglas, flujo):
         for nombre in ("pedir", "buscar_web"):
             assert not hasattr(modulo, nombre), f"{modulo.__name__} importó {nombre} por nombre"
+
+
+def test_completar_guarda_documentos_y_avisa(monkeypatch, sin_red):
+    guion(monkeypatch, Triage=[CLARA], Borrador=[borrador()], Lectura=[LECTURA], Propuesta=[propuesta()])
+    destino = __import__("pathlib").Path(tempfile.mkdtemp()) / "lead.json"
+    destino.write_text(json.dumps({"formulario": EJEMPLO}))
+    workflow.completar(destino)
+    r = json.loads(destino.read_text())
+    assert r["aviso"] == "enviado" and r["error"] is None
+    (asunto, texto, adjuntos), = sin_red
+    assert [a.name for a in adjuntos] == ["lead.interno.html", "lead.pitch.html"]
+    assert "Marina" in asunto and "Encaja: sí" in texto
+    pitch = adjuntos[1].read_text()
+    assert "USD" not in pitch and "name=Marina" in pitch  # sin precio; Cal.com con nombre
+
+
+def test_si_el_mail_falla_el_registro_queda(monkeypatch):
+    guion(monkeypatch, Triage=[CLARA], Borrador=[borrador()], Lectura=[LECTURA], Propuesta=[propuesta()])
+    monkeypatch.setattr(avisos, "email", lambda *a: (_ for _ in ()).throw(OSError("smtp caído")))
+    destino = __import__("pathlib").Path(tempfile.mkdtemp()) / "lead.json"
+    destino.write_text(json.dumps({"formulario": EJEMPLO}))
+    workflow.completar(destino)
+    r = json.loads(destino.read_text())
+    assert r["borrador"] and r["aviso"].startswith("falló") and "smtp caído" in r["aviso"]
+
+
+def test_mail_de_error_no_dice_datos_insuficientes():
+    texto = avisos.texto_intake("lead", {"formulario": EJEMPLO, "error": "ValueError('x')"})
+    assert "El workflow falló" in texto and "Datos insuficientes" not in texto
