@@ -54,3 +54,14 @@ def test_portero():
     with pytest.raises(InputCheckError):
         chat.portero(c)
     assert c.session_state["estado"] == "cerrada"
+
+
+@pytest.mark.parametrize("malo", ["../../etc/x", "a/b", "", "x" * 65, "con espacio"])
+def test_archivo_no_sale_de_borradores(malo):
+    with pytest.raises(ValueError):
+        chat.archivo(malo)
+
+
+def test_archivo_acepta_ids_reales():
+    for bueno in ["cli-1a2b3c4d", "758b371f-38f2-4471-a790-8f0dce1510b9"]:
+        assert chat.archivo(bueno).parent == chat.BORRADORES

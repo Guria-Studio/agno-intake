@@ -10,6 +10,7 @@ el `session_state` de Agno, que se guarda en la misma fila que el historial.
 """
 
 import json
+import re
 from pathlib import Path
 from typing import Literal
 
@@ -26,7 +27,14 @@ BORRADORES = DATA / "borradores"  # junto a la base: un solo volumen en producci
 MAX_TURNOS = 30
 
 
+ID_SEGURO = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
+
 def archivo(session_id: str) -> Path:
+    """El borrador de una sesión. El session_id termina siendo un nombre de archivo: cuando lo
+    mande el navegador (lección 3), "../../algo" no puede salir de data/borradores."""
+    if not ID_SEGURO.match(session_id):
+        raise ValueError(f"session_id inválido: {session_id!r}")
     return BORRADORES / f"{session_id}.json"
 
 
