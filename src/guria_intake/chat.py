@@ -18,7 +18,7 @@ from agno.db.sqlite import SqliteDb
 from agno.exceptions import InputCheckError
 from agno.run import RunContext
 
-from .dominio import DATA, base, modelo
+from .dominio import DATA, base, email_valido, modelo
 from .prompts import CHAT
 from .schemas import Plazo
 
@@ -49,7 +49,7 @@ def enviar_intake(
     estado = run_context.session_state
     if estado["estado"] != "abierta":
         return "Esta conversación ya terminó. No lo envíes de nuevo."
-    if "@" not in email or "." not in email.split("@")[-1]:
+    if not email_valido(email):
         return f"El email '{email}' no parece válido. Pídele que lo revise."
     if len(descripcion) < 40:
         return "La descripción es muy corta. Pide más detalle del problema antes de enviar."

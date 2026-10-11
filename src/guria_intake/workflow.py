@@ -113,7 +113,8 @@ def buscar_web(consulta: str) -> list[dict]:
 
 def privada(consulta: str, f: dict) -> bool:
     """True si la consulta lleva datos del cliente. Tavily es un tercero (LGPD)."""
-    datos = [f["email"], f["email"].split("@")[1], f.get("empresa", ""), *f["nombre"].split()]
+    _, _, dominio = f["email"].partition("@")  # partition: sin "@" no rompe
+    datos = [f["email"], dominio, f.get("empresa", ""), *f["nombre"].split()]
     return any(re.search(rf"\b{re.escape(d)}\b", consulta, re.I) for d in datos if len(d) > 2)
 
 

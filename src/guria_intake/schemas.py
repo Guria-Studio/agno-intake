@@ -6,7 +6,9 @@ al campo para que nunca describan un campo que ya no existe.
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from .dominio import email_valido
 
 # El plazo es la única opción cerrada del formulario. El tipo de proyecto ya no existe: el
 # cliente no conoce nuestras categorías; el borrador lo compara con capacidades.toml.
@@ -20,6 +22,14 @@ class Formulario(BaseModel):
     empresa: str = ""
     descripcion: str = Field(min_length=40)
     plazo: Plazo
+
+    @field_validator("email")
+    @classmethod
+    def _email(cls, v: str) -> str:
+        # Desde AgentOS el formulario no pasa por el chat: la misma regla tiene que estar acá.
+        if not email_valido(v):
+            raise ValueError("email inválido")
+        return v.strip()
 
 
 class Busquedas(BaseModel):

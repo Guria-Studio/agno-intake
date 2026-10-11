@@ -254,3 +254,17 @@ def test_si_tavily_falla_igual_se_redacta(monkeypatch):
           Lectura=[LECTURA], Propuesta=[propuesta()])
     r = workflow.procesar(EJEMPLO)
     assert r["borrador"] and r["fuentes"] == []
+
+
+@pytest.mark.parametrize("email", ["nada", "ana@", "ana@x", "a b@x.com"])
+def test_formulario_rechaza_email_invalido(email):
+    from pydantic import ValidationError
+
+    from guria_intake.schemas import Formulario
+
+    with pytest.raises(ValidationError):
+        Formulario(**EJEMPLO | {"email": email})
+
+
+def test_privada_no_rompe_sin_arroba():
+    assert not workflow.privada("recordatorios", {"nombre": "Ana", "email": "sin-arroba", "empresa": ""})

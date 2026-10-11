@@ -2,6 +2,7 @@
 
 import math
 import os
+import re
 import tomllib
 from functools import cache
 from pathlib import Path
@@ -63,6 +64,15 @@ def estimar(esfuerzo: list[dict]) -> dict:
     h_max = sum(p["horas_max"] for p in esfuerzo)
     return {"horas": (h_min, h_max), "usd": (h_min * t_min, h_max * t_max), "tarifa": (t_min, t_max),
             "semanas": (max(1, math.ceil(h_min / por_semana)), max(1, math.ceil(h_max / por_semana)))}
+
+
+EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def email_valido(email: str) -> bool:
+    """Forma de email, nada más: no se verifica que exista (por eso todo lo que se guarda por
+    email se trata como "no verificado"). Una sola regla para el chat y el workflow."""
+    return bool(EMAIL.match(email.strip()))
 
 
 def formulario_a_texto(f: dict) -> str:
