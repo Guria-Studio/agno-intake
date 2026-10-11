@@ -1,4 +1,4 @@
-"""Tests sin red del workflow. pedir() es el único punto que toca el modelo: lo
+"""Tests sin red del workflow. externo.pedir() es el único punto que toca el modelo: lo
 reemplazamos por un guion y corremos el Workflow de Agno de verdad."""
 
 import json
@@ -12,6 +12,7 @@ os.environ.setdefault("ROUTER_API_KEY", "test")
 import pytest
 
 from guria_intake import workflow
+from guria_intake.workflow import externo, reglas
 from guria_intake.dominio import CASOS, EJEMPLO, catalogo, estimar
 from guria_intake.schemas import Borrador, Busquedas, Etapa, Lectura, Partida, Propuesta, Triage
 
@@ -51,7 +52,7 @@ def guion(monkeypatch, **respuestas):
         llamadas[f"texto_{schema.__name__}"] = texto  # el último contexto que recibió
         return colas[schema.__name__].pop(0)
 
-    monkeypatch.setattr(workflow, "pedir", falso)
+    monkeypatch.setattr(externo, "pedir", falso)
     return llamadas
 
 
@@ -115,41 +116,41 @@ def test_la_propuesta_no_lleva_precio_plazo_ni_presion(monkeypatch, texto):
 @pytest.mark.parametrize("texto", ["Descuento por tiempo limitado", "Últimos cupos del mes", "Só hoje",
                                    "Oferta válida hasta el viernes", "No te quedes afuera"])
 def test_presion_se_detecta(texto):
-    assert workflow.PRESION.search(texto)
+    assert reglas.PRESION.search(texto)
 
 
 @pytest.mark.parametrize("texto", ["Enviar ofertas personalizadas a tus clientes",
                                    "Un descuento automático al recomprar", "Promociones por WhatsApp"])
 def test_ofertas_y_descuentos_del_proyecto_no_son_presion(texto):
     # Si el proyecto es de ofertas, la propuesta tiene que poder decirlo con las palabras del cliente.
-    assert not workflow.PRESION.search(texto)
+    assert not reglas.PRESION.search(texto)
 
 
 @pytest.mark.parametrize("texto", ["Listo en dos semanas", "En un mes lo probamos", "Medio año de trabajo",
                                    "Em duas semanas", "Un par de semanas", "En 15 días", "Uma quinzena"])
 def test_plazo_en_palabras_se_detecta(texto):
-    assert workflow.PLAZO.search(texto)
+    assert reglas.PLAZO.search(texto)
 
 
 @pytest.mark.parametrize("texto", ["Un día normal con la agenda llena", "Cada mes revisamos los números",
                                    "Responde en 24 horas", "Las semanas con más turnos"])
 def test_no_es_plazo(texto):
-    assert not workflow.PLAZO.search(texto)
+    assert not reglas.PLAZO.search(texto)
 
 
 @pytest.mark.parametrize("texto", ["Cuesta 5 mil dólares", "USD 3000", "US$ 900", "Unos $1500", "R$ 5000"])
 def test_precio_en_dolares_se_detecta(texto):
-    assert workflow.PRECIO.search(texto)
+    assert reglas.PRECIO.search(texto)
 
 
 def test_turnos_reales_no_es_moneda():
-    assert not workflow.PRECIO.search("Pierden turnos reales cada semana")
+    assert not reglas.PRECIO.search("Pierden turnos reales cada semana")
 
 
 def test_si_el_modelo_falla_el_lead_no_se_pierde(monkeypatch):
     def roto(*a):
         raise ValueError("el modelo devolvió texto")
-    monkeypatch.setattr(workflow, "pedir", roto)
+    monkeypatch.setattr(externo, "pedir", roto)
     destino = __import__("pathlib").Path(tempfile.mkdtemp()) / "lead.json"
     destino.write_text(json.dumps({"formulario": EJEMPLO}))
     workflow.completar(destino)
@@ -211,7 +212,7 @@ FUENTE = {"titulo": "Recordatorios para clínicas", "url": "https://recordatorio
 def con_tavily(monkeypatch):
     monkeypatch.setenv("TAVILY_API_KEY", "test")
     buscadas = []
-    monkeypatch.setattr(workflow, "buscar_web", lambda q: buscadas.append(q) or [FUENTE])
+    monkeypatch.setattr(externo, "buscar_web", lambda q: buscadas.append(q) or [FUENTE])
     return buscadas
 
 
@@ -230,8 +231,8 @@ def test_investigar_no_manda_datos_del_cliente(monkeypatch):
 
 def test_privada_respeta_palabras():
     f = {"nombre": "Ana Paz", "email": "ana@sorriso.com", "empresa": "Sorriso"}
-    assert workflow.privada("software para Sorriso", f)
-    assert not workflow.privada("recordatorios para mañana", f)  # "ana" dentro de otra palabra no cuenta
+    assert reglas.privada("software para Sorriso", f)
+    assert not reglas.privada("recordatorios para mañana", f)  # "ana" dentro de otra palabra no cuenta
 
 
 def test_el_revisor_rechaza_urls_inventadas(monkeypatch):
@@ -249,7 +250,7 @@ def test_si_tavily_falla_igual_se_redacta(monkeypatch):
     monkeypatch.setenv("TAVILY_API_KEY", "test")
     def caida(q):
         raise ConnectionError("sin internet")
-    monkeypatch.setattr(workflow, "buscar_web", caida)
+    monkeypatch.setattr(externo, "buscar_web", caida)
     guion(monkeypatch, Busquedas=[Busquedas(consultas=["x"])], Triage=[CLARA], Borrador=[borrador()],
           Lectura=[LECTURA], Propuesta=[propuesta()])
     r = workflow.procesar(EJEMPLO)
@@ -267,9 +268,19 @@ def test_formulario_rechaza_email_invalido(email):
 
 
 def test_privada_no_rompe_sin_arroba():
-    assert not workflow.privada("recordatorios", {"nombre": "Ana", "email": "sin-arroba", "empresa": ""})
+    assert not reglas.privada("recordatorios", {"nombre": "Ana", "email": "sin-arroba", "empresa": ""})
 
 
 def test_tarifa_fija(monkeypatch):
     monkeypatch.setenv("TARIFA_USD_HORA", "30")
     assert estimar([{"horas_min": 10, "horas_max": 20}])["usd"] == (300, 600)
+
+
+def test_los_pasos_no_guardan_copias_de_externo():
+    """Si un paso hiciera `from .externo import pedir`, el reemplazo de los tests no lo alcanzaría
+    y ese paso llamaría al modelo real. Todo acceso a la red pasa por el módulo externo."""
+    from guria_intake.workflow import flujo, pasos
+
+    for modulo in (pasos, reglas, flujo):
+        for nombre in ("pedir", "buscar_web"):
+            assert not hasattr(modulo, nombre), f"{modulo.__name__} importó {nombre} por nombre"

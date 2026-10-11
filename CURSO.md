@@ -29,7 +29,11 @@ agno-intake/
 ├── .env.example             variables necesarias; copiar a .env
 ├── src/guria_intake/        el paquete
 │   ├── chat.py              agente conversacional (lección 1)
-│   ├── workflow.py          workflow de redacción (lección 2)
+│   ├── workflow/            workflow de redacción (lección 2)
+│   │   ├── externo.py       lo único que sale a la red: modelo y Tavily
+│   │   ├── pasos.py         los pasos que producen algo
+│   │   ├── reglas.py        lo que se verifica en código, sin modelo
+│   │   └── flujo.py         el grafo y cómo se corre
 │   ├── dominio.py           modelo, base, catálogo, reglas puras
 │   ├── capacidades.toml     lo que hace el equipo y sus casos (lo editas tú)
 │   ├── schemas.py           contratos pydantic
@@ -42,12 +46,13 @@ agno-intake/
 Es el *src layout*: el código vive en un paquete instalable y los tests lo importan como
 cualquier usuario (`from guria_intake import chat`). Así un test no puede pasar por importar
 por accidente un archivo suelto de la raíz. No hay más subcarpetas (`agents/`, `services/`...)
-a propósito: con seis módulos solo agregarían saltos. Se separan cuando un módulo crezca.
+a propósito: con seis módulos solo agregarían saltos. Se separan cuando un módulo crezca,
+y eso ya pasó una vez: `workflow.py` llegó a 377 líneas y se volvió `workflow/` (ver lección 2, §9).
 
 ## Plan
 
 1. **El agente conversacional** ✅ `chat.py`: Agent, tools, RunContext, session_state, pre-hooks.
-2. **El workflow de redacción** ✅ `workflow.py`: `triage → buscar → (redactar ⇄ revisar ‖ marketing) → componer ⇄ revisar_propuesta`
+2. **El workflow de redacción** ✅ `workflow/`: `triage → buscar → (redactar ⇄ revisar ‖ marketing) → componer ⇄ revisar_propuesta`
    con `Workflow`, `Parallel`, `Loop` y `output_schema`. Las reglas siguen en código.
 3. **La API**: FastAPI con `/api/chat` y streaming. AgentOS ya lo usamos como playground (`playground.py`);
    aquí decidimos si también sirve para producción.
@@ -163,7 +168,7 @@ uv run --env-file .env python -m guria_intake.chat   # chat en la terminal
 
 ## Lección 2: el workflow de redacción
 
-Archivos: `workflow.py`, `schemas.py`, `dominio.py`, `playground.py`, `tests/test_workflow.py`.
+Archivos: `workflow/`, `schemas.py`, `dominio.py`, `playground.py`, `tests/test_workflow.py`.
 
 ### 1. El grafo se lee como el diagrama
 
@@ -198,7 +203,7 @@ se desincronicen cuando renombras un paso.
 
 Agno permite `Step(agent=mi_agente)`: el agente recibe la salida del paso anterior. Sirve para
 pipelines lineales. Aquí cada paso arma un contexto distinto (formulario + casos + problemas de
-la vuelta anterior), así que usamos funciones que llaman a `pedir()`. Además, `pedir()` es el
+la vuelta anterior), así que usamos funciones que llaman a `externo.pedir()`. Además, `pedir()` es el
 **único** lugar que toca el modelo: los tests lo reemplazan por un guion y corren el
 `Workflow` real, con sus ramas, loops y paralelos, sin red.
 
@@ -277,6 +282,30 @@ decidiría cuántas búsquedas hacer y con qué texto, y ninguna de las reglas d
 aplicar *antes* de que la búsqueda saliera. Si el modelo decide, usa una tool; si decide el
 proceso, usa un paso.
 
+### 9. Cuándo partir un archivo: de `workflow.py` a `workflow/`
+
+Con todo lo anterior, `workflow.py` llegó a 377 líneas mezclando cuatro cosas que cambian por
+razones distintas. Se partió por esa razón, no por tamaño:
+
+| Archivo | Qué tiene | Cambia cuando... |
+|---|---|---|
+| `externo.py` | `pedir()` y `buscar_web()` | cambias de modelo o de buscador |
+| `pasos.py` | triage, investigar, redactar, marketing, componer... | cambia lo que se le pide al modelo |
+| `reglas.py` | `revisar`, `revisar_propuesta`, `privada`, PRECIO/PLAZO/PRESION | agregas un guardrail (lecciones 4 y 5) |
+| `flujo.py` | `build_workflow`, decisiones, `procesar`, `completar` | cambia el diagrama |
+
+`__init__.py` reexporta `build_workflow`, `procesar` y `completar`: `chat.py` y `playground.py`
+no cambiaron una línea. Sigue corriendo con `python -m guria_intake.workflow` (ahora por `__main__.py`).
+
+**La trampa al partir: `monkeypatch` reemplaza un nombre, no una función.** Si `pasos.py` hace
+`from .externo import pedir`, se queda con su propia copia del nombre. El test reemplaza
+`externo.pedir`, pero el paso sigue llamando al original… y sale a la red. Por eso los pasos
+llaman `externo.pedir(...)` a través del módulo, y `test_los_pasos_no_guardan_copias_de_externo`
+falla si alguien vuelve a importar por nombre.
+
+Lo que **no** se hizo: una carpeta por paso, clases base o un registro de pasos. Con ~150 líneas
+por archivo, más capas solo agregarían saltos.
+
 ### Ejercicios
 
 1. En el playground, corre el workflow con una descripción vaga y mira qué rama tomó la
@@ -285,3 +314,5 @@ proceso, usa un paso.
 2. Escribe un test donde la propuesta falle la revisión **dos** veces. ¿Qué queda en
    `problemas_propuesta`? ¿Te parece bien que avance igual? (En el original avanzaba igual.)
 3. Cambia `max_iterations` del loop del borrador a 1 y corre los tests. ¿Cuál falla y por qué?
+4. En `pasos.py` cambia `from . import externo` por `from .externo import pedir` (y usa `pedir`
+   en `triage`). Corre los tests: ¿cuáles fallan y con qué error? ¿Cuál te lo explica?
