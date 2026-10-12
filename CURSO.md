@@ -42,6 +42,7 @@ agno-intake/
 │   ├── avisos.py            email al equipo por SMTP (Resend)
 │   ├── api.py               POST /api/chat con streaming, para la web (lección 3)
 │   ├── evals.py             clientes simulados + chequeos en código + juez (lección 4)
+│   ├── mantenimiento.py     borrado LGPD, retención y reporte semanal (lección 6)
 │   ├── admin/               backoffice en Streamlit (login, solo localhost)
 │   │   ├── app.py           entrada: navegación; el tema está en .streamlit/config.toml
 │   │   ├── auth.py          login de un usuario (ADMIN_USER / ADMIN_PASSWORD)
@@ -73,7 +74,7 @@ y eso ya pasó una vez: `workflow.py` llegó a 377 líneas y se volvió `workflo
    evals con clientes simulados, chequeos en código y `AgentAsJudgeEval`.
 5. **Documentos y avisos** ✅ `documentos/` y `avisos.py`: PDF interno, pitch y email. Se adelantó
    a la 3 y la 4 porque el producto lo necesitaba: sin aviso, nadie se entera de un intake.
-6. **Mantenimiento**: retención, borrado LGPD y reporte semanal sobre las sesiones de Agno.
+6. **Mantenimiento** ✅ `mantenimiento.py`: retención, borrado LGPD y reporte semanal sobre las sesiones de Agno.
 
 ---
 
@@ -589,3 +590,107 @@ Variables nuevas en `.env.example`: `SMTP_*`, `AVISOS_EMAIL`, `AGENDA_URL`, `CHR
    recibirías si el workflow anduvo pero **Chrome** falló: ¿se entiende qué pasó? Mejóralo con un test.
 4. Si quisieras mandarle el pitch **directo al cliente**, ¿qué te frena? Piensa en el email no
    verificado y en `revisar_propuesta`: ¿alcanza un revisor en código o tiene que mirar una persona?
+
+---
+
+## Lección 6: mantenimiento
+
+Archivos: `mantenimiento.py`, `tests/test_mantenimiento.py`.
+
+Las lecciones anteriores guardan datos de personas. Esta decide cuándo dejan de guardarse.
+La LGPD da dos razones para borrar: el titular lo pide (art. 18, VI) y la finalidad terminó (art. 16).
+La primera es `borrar`, la segunda es `retener`.
+
+### 1. Antes de borrar, el mapa
+
+Lo primero no fue código, fue mirar la base:
+
+| Dónde | Qué hay | Cómo se borra |
+|---|---|---|
+| `agno_sessions` | estado, formulario, historial | `delete_sessions()` |
+| `agno_runs` | cada mensaje y respuesta, otra vez | lo arrastra `delete_sessions()` (`ON DELETE CASCADE` y borrado explícito) |
+| `agno_metrics` | el email como `user_id` (métricas por cliente y día) | **nadie**: hay que borrarlo aparte |
+| `data/borradores/<sid>.*` | JSON, PDF y HTML del lead | `unlink` |
+| el archivo `intake.db` | **los bytes de todo lo anterior** | `VACUUM` |
+
+Dos sorpresas. `agno_metrics` guarda el email y borrar sesiones no la toca. Y SQLite no borra:
+un `DELETE` marca páginas como libres, pero el texto sigue en el archivo (y en el WAL) hasta que
+se reusan. `strings data/intake.db | grep @` lo encuentra. `compactar()` corre `VACUUM`, que
+reescribe la base solo con lo vivo, y vacía el WAL.
+
+`test_borrar_todo_de_una_persona_y_nada_de_otra` lee los bytes crudos del archivo. Si apagas
+`compactar()`, falla.
+
+Las tablas con `user_id` no están en una lista: `tablas_con_user_id()` las descubre. Si una versión
+nueva de Agno agrega una (memorias, aprendizajes), el borrado también la cubre.
+
+### 2. Encontrar a alguien sin llevarse a otro
+
+El visitante que dijo su email y abandonó la charla no tiene formulario ni `user_id`: su email
+solo está en un mensaje. Por eso `ids_de()` busca en el JSON crudo de sesiones y runs, no en un campo.
+
+La primera versión usaba `LIKE '%ana@x.com%'`, y tenía dos errores:
+- En `LIKE`, `_` es comodín: `ana_x@x.com` encontraba también a `anaax@x.com`.
+- Es una subcadena: `ana@x.com` está dentro de `juana@x.com` y de `ana@x.com.br`.
+
+En una función de borrado, buscar de más es **borrar los datos de otra persona**. Ahora SQL solo
+trae candidatos con `instr` (sin comodines) y decide `menciona()`, una regex con límites. El test
+crea a Ana, a Juana y a `ana@x.com.br`, borra a Ana y verifica que las otras dos siguen.
+
+El mismo error lo cometí después en el test: conté `b"ana@x.com"` en los bytes y encontré
+"restos" que eran de Juana. Se usa la misma regex en el test y en el código.
+
+### 3. Retención: dos plazos
+
+| Qué | Cuánto | Por qué |
+|---|---|---|
+| charla abierta o cerrada sin enviar | 30 días (`RETENCION_DIAS_SIN_ENVIAR`) | no tiene finalidad: nadie va a contestarla |
+| intake enviado y su corrida del workflow | 365 días (`RETENCION_DIAS`) | sirve mientras hay propuesta o relación |
+
+Se cuenta desde la última actividad (`updated_at`). Las métricas por cliente vienen solo de
+corridas del workflow, así que siguen la regla de los enviados. Ojo: la memoria por cliente de la
+lección 2 (`antecedentes`) también se acaba al año. Es coherente: lo que no se guarda no se recuerda.
+
+Los plazos son una decisión del negocio, no técnica. Escríbelos en tu política de privacidad.
+
+### 4. Lo que el código no puede borrar
+
+- **El email del aviso**: llegó a la casilla del equipo con el PDF adjunto. Se borra a mano.
+- **Resend** guarda los mails enviados en sus logs, según tu plan.
+- **El proveedor del modelo** recibió la conversación. Revisa su política de retención.
+- **Los backups** de la base: si restauras uno viejo, vuelven los borrados. Anota los pedidos de
+  borrado (sin los datos) y vuelve a correrlos después de restaurar.
+
+Un pedido de borrado no termina en `borrar()`: termina cuando revisaste esta lista.
+
+### 5. El reporte semanal
+
+`semanal` corre la retención y manda un email al equipo: conversaciones y enviados de la
+semana, los que encajan, los que necesitan atención (de **cualquier** semana: un error viejo sigue
+siendo un lead sin atender) y cuánto borró la retención. Usa `admin/datos.py` (no tiene Streamlit)
+y `avisos.email`.
+
+### Correr
+
+```bash
+uv run --env-file .env python -m guria_intake.mantenimiento buscar ana@x.com   # sesiones y archivos
+uv run --env-file .env python -m guria_intake.mantenimiento borrar ana@x.com   # pide confirmación
+uv run --env-file .env python -m guria_intake.mantenimiento semanal            # retención + reporte
+```
+
+En producción, `semanal` va como tarea programada (en Coolify: Scheduled Tasks, `0 9 * * 1`).
+`VACUUM` necesita un lock exclusivo: con la API recibiendo mensajes puede esperar unos segundos.
+Variables nuevas en `.env.example`: `RETENCION_DIAS_SIN_ENVIAR`, `RETENCION_DIAS`.
+
+### Ejercicios
+
+1. Antes de correr nada: `strings data/intake.db | grep -c @`. Borra un email de prueba con y sin
+   `compactar()` y vuelve a contar.
+2. Un cliente pide **ver** sus datos (art. 18, II), no borrarlos. `buscar` te da las sesiones:
+   escribe `exportar(email)` que devuelva un JSON con sus mensajes y su formulario. ¿Incluyes la
+   `nota_interna`? (Pista: es una opinión del equipo sobre él.)
+3. El reporte manda nombres de clientes por email. ¿Es un problema? ¿Qué cambiarías si el
+   equipo creciera a diez personas?
+4. `retener` borra una charla abierta a los 30 días, pero ¿y si el visitante vuelve el día 29 y
+   escribe? Mira `updated_at`: ¿cuándo empieza a contar de nuevo?
+
