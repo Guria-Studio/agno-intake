@@ -139,12 +139,17 @@ def detalle(fila: dict) -> None:
                                           ("pitch", "Pitch", ":material/slideshow:")):
                 if ruta := docs.get(nombre):
                     st.download_button(rotulo, ruta.read_bytes(), ruta.name, icon=icono, key=ruta.name)
-            if r and st.button("Reprocesar", icon=":material/refresh:",
-                               help="Corre el workflow, rehace los PDF y manda el email de nuevo."):
-                with st.spinner("Redactando… (~1 min)"):
-                    completar(archivo(sid))
-                st.session_state.abierta = sid  # la tabla cambió y perdió la selección: volver a este
-                st.rerun()
+            if r:
+                with st.popover("Reprocesar", icon=":material/refresh:"):
+                    st.caption("Corre el workflow de nuevo y rehace los PDF (~1 min, gasta tokens).")
+                    # Si el equipo ya recibió el aviso, otro mail es ruido; si no, es lo que falta.
+                    avisar = st.checkbox("Mandar el email al equipo", value=r.get("aviso") != "enviado",
+                                         key=f"avisar-{sid}")
+                    if st.button("Reprocesar ahora", type="primary", key=f"reprocesar-{sid}"):
+                        with st.spinner("Redactando… (~1 min)"):
+                            completar(archivo(sid), avisar=avisar)
+                        st.session_state.abierta = sid  # la tabla cambió y perdió la selección
+                        st.rerun()
         if r.get("error"):
             st.error(r["error"], icon=":material/error:")
         if str(r.get("aviso") or "").startswith("falló"):

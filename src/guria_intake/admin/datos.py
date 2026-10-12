@@ -23,10 +23,14 @@ def registro(session_id: str) -> dict:
 
 def documentos(session_id: str) -> dict[str, Path]:
     """{"interno": ruta, "pitch": ruta}, solo los que existen. HTML si no había Chrome."""
+    try:
+        json_ = archivo(session_id)
+    except ValueError:  # como en registro(): un id así nunca tuvo archivos
+        return {}
     hallados = {}
     for nombre in ("interno", "pitch"):
         for ext in ("pdf", "html"):
-            if (ruta := archivo(session_id).with_name(f"{session_id}.{nombre}.{ext}")).exists():
+            if (ruta := json_.with_name(f"{session_id}.{nombre}.{ext}")).exists():
                 hallados[nombre] = ruta
                 break
     return hallados

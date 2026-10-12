@@ -146,12 +146,13 @@ def documentos(destino: Path, registro: dict) -> list[Path]:
     return adjuntos
 
 
-def completar(destino: Path) -> None:
+def completar(destino: Path, avisar: bool = True) -> None:
     """Después de enviar_intake: corre el workflow, arma el interno y el pitch en PDF y te los
     manda por email. Cada etapa guarda lo suyo antes de la siguiente: si algo falla, el lead
-    no se pierde y el error queda anotado en el registro."""
+    no se pierde y el error queda anotado en el registro.
+    avisar=False (Reprocesar en el backoffice): rehace todo sin mail; el aviso anterior queda."""
     log = logging.getLogger(__name__)
-    registro = json.loads(destino.read_text()) | {"error": None, "aviso": None}
+    registro = json.loads(destino.read_text()) | {"error": None}
     try:
         # Prefijo propio: el chat ya usa destino.stem como session_id, y en Agno el
         # session_id es único en toda la base (sesión de agente o de workflow, no ambas).
@@ -167,6 +168,8 @@ def completar(destino: Path) -> None:
         log.exception("intake: fallaron los documentos")
         registro["error"] = registro["error"] or f"documentos: {e!r}"
     destino.write_text(json.dumps(registro, ensure_ascii=False, indent=2))
+    if not avisar:
+        return
 
     try:  # el aviso va último: si el mail falla, todo lo anterior ya está en disco
         avisos.email(avisos.asunto(registro, interno.titulo(registro)),

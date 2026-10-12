@@ -319,3 +319,12 @@ def test_si_el_mail_falla_el_registro_queda(monkeypatch):
 def test_mail_de_error_no_dice_datos_insuficientes():
     texto = avisos.texto_intake("lead", {"formulario": EJEMPLO, "error": "ValueError('x')"})
     assert "El workflow falló" in texto and "Datos insuficientes" not in texto
+
+
+def test_reprocesar_sin_avisar_no_manda_mail_ni_pisa_el_aviso(monkeypatch, sin_red):
+    guion(monkeypatch, Triage=[CLARA], Borrador=[borrador()], Lectura=[LECTURA], Propuesta=[propuesta()])
+    destino = __import__("pathlib").Path(tempfile.mkdtemp()) / "lead.json"
+    destino.write_text(json.dumps({"formulario": EJEMPLO, "aviso": "enviado"}))
+    workflow.completar(destino, avisar=False)
+    r = json.loads(destino.read_text())
+    assert sin_red == [] and r["aviso"] == "enviado" and r["borrador"]

@@ -694,3 +694,61 @@ Variables nuevas en `.env.example`: `RETENCION_DIAS_SIN_ENVIAR`, `RETENCION_DIAS
 4. `retener` borra una charla abierta a los 30 días, pero ¿y si el visitante vuelve el día 29 y
    escribe? Mira `updated_at`: ¿cuándo empieza a contar de nuevo?
 
+---
+
+## Extra: el backoffice
+
+Archivos: `admin/`, `.streamlit/config.toml`, `tests/test_admin.py`.
+
+Se armó entre la lección 5 y la 3: con intakes llegando por email, hacía falta un lugar para
+verlos todos, reprocesar los que fallaron y probar el chat sin abrir la terminal.
+
+### 1. Por qué Streamlit
+
+Es una herramienta interna de una persona. Streamlit da tablas, filtros, pestañas y login en
+Python, sin frontend ni API propia. Si el equipo crece o el backoffice se abre a clientes, se
+reemplaza; `datos.py` se queda.
+
+### 2. `datos.py` no importa Streamlit
+
+Toda la lectura (sesiones de Agno, el JSON del lead, los PDF, el `seguimiento` de cada fila) vive
+en funciones comunes. Por eso se prueba con pytest directo, y por eso `mantenimiento.semanal`
+(lección 6) arma el reporte con las mismas `conversaciones()` que la tabla.
+Las vistas (`vistas/*.py`) solo dibujan.
+
+### 3. Seguridad de una herramienta con datos de clientes
+
+- **Solo localhost** por defecto (`.streamlit/config.toml`). Para entrar desde otra máquina, la IP
+  de Tailscale; nunca `0.0.0.0`.
+- **Login de un usuario** (`ADMIN_USER`, `ADMIN_PASSWORD`). `hmac.compare_digest` tarda lo mismo
+  acierte o no, y se comparan usuario y clave siempre (`&`, no `and`) para no revelar cuál falló.
+- **Un segundo de espera** tras un intento fallido: frena la fuerza bruta a mano. Si se publica,
+  hace falta un límite por IP de verdad.
+
+### 4. Reprocesar sin ruido
+
+Reprocesar corre `completar()` otra vez: workflow, PDF y, antes, siempre el email. Un clic de más
+mandaba un aviso duplicado. Ahora el botón abre un popover con la casilla "Mandar el email al
+equipo", marcada solo si el aviso anterior no llegó (`aviso != "enviado"`). Sin la casilla,
+`completar(avisar=False)` rehace todo y deja el aviso anterior como estaba.
+
+### 5. Tests con AppTest
+
+`streamlit.testing.v1.AppTest` corre la app en el mismo proceso, sin navegador: se escribe en
+los `text_input`, se hace clic y se mira qué quedó en pantalla. Como es el mismo proceso, un
+`monkeypatch` sobre `datos.base` le cambia la base a la app. Así se prueban el login, la página
+vacía y el detalle de una conversación.
+
+### Correr
+
+```bash
+uv run --env-file .env streamlit run src/guria_intake/admin/app.py
+```
+
+### Ejercicios
+
+1. Cierra sesión y vuelve a entrar con la clave mal tres veces. ¿Cuánto tardó? ¿Qué pasa si
+   recargas la página entre intentos?
+2. Agrega un botón "Borrar datos" en el detalle que llame a `mantenimiento.borrar` (lección 6).
+   ¿Qué confirmación pedirías antes? ¿Debería borrar por email o solo esa sesión?
+
